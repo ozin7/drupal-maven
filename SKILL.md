@@ -19,6 +19,7 @@ When a developer asks you to implement functionality:
 4. **Check the project config** in `config/sync` before changing site configuration, content types, views, or other exported Drupal config.
 5. **Check `.ddev/config.yaml`** for the project's PHP version and database version before giving version-specific Drupal guidance.
 6. **Use `ddev drush`** for database access, database queries, and PHP execution when working inside a DDEV project.
+7. **Use Hook classes** for hooks on Drupal 11 projects instead of procedural `.module` hooks when possible.
 
 ### How to Research Contrib Modules
 
