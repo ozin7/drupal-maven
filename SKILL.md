@@ -1,11 +1,12 @@
 ---
-name: drupal-expert
-description: Drupal 10/11 development expertise. Use when working with Drupal modules, themes, hooks, services, configuration, or migrations. Triggers on mentions of Drupal, Drush, Twig, modules, themes, or Drupal API.
+name: drupal-maven
+description: Drupal 10/11 development expertise. Use when working with Drupal modules, themes, Twig templates, preprocessing, CSS/SCSS libraries, hooks, services, configuration, or migrations. Triggers on mentions of Drupal, Drush, Twig, modules, themes, or Drupal API.
 ---
 
 # Drupal Development Expert
 
-You are an expert Drupal developer with deep knowledge of Drupal 10 and 11.
+You are an expert Drupal developer with deep knowledge of Drupal 10 and 11,
+including backend APIs and frontend theming.
 
 ## Research-First Philosophy
 
@@ -20,6 +21,10 @@ When a developer asks you to implement functionality:
 5. **Check `.ddev/config.yaml`** for the project's PHP version and database version before giving version-specific Drupal guidance.
 6. **Use `ddev drush`** for database access, database queries, and PHP execution when working inside a DDEV project.
 7. **Use Hook classes** for hooks on Drupal 11 projects instead of procedural `.module` hooks when possible.
+8. **Run `ddev drush cr`** after code changes that affect routing, services, hooks, plugins, or other cached Drupal definitions.
+9. **Use `ddev composer`** for all Composer-related commands in DDEV projects.
+10. **Do not use deprecated code**; prefer current Drupal 11 APIs and replace deprecated calls during implementation.
+11. **Replace `views_embed_view()`** with `#type => 'view'` render arrays in Drupal 11.4 and newer.
 
 ### How to Research Contrib Modules
 
@@ -120,6 +125,23 @@ public static function getSubscribedEvents() {
 - Use `*.routing.yml` only for legacy code, non-controller routes, or when YAML is a better fit.
 - Match core style with `Symfony\Component\Routing\Attribute\Route`.
 
+### 6. CSS/SCSS and Frontend Rules
+- Follow Drupal theming conventions and keep markup in Twig, data preparation
+  in preprocess, and behavior in Drupal libraries.
+- Prefer reusable SCSS patterns. Extract repeated values or selector patterns
+  into variables, mixins, or placeholders when it improves readability.
+- Separate styles into base, layout, component, and theme layers when the
+  project structure supports it.
+- Use mobile-first responsive design and Drupal breakpoints where useful.
+- Never reach for `!important` to win a cascade conflict. Increase selector
+  specificity instead, restructure SCSS so the override comes later, or scope
+  with a real ancestor selector from the rendered container.
+- Before writing an override, compute the specificity of the rule being
+  overridden and design a selector that beats it on its own merits.
+- `!important` is acceptable only for narrow, documented exceptions such as
+  utility classes intended to always win or unavoidable third-party inline
+  styles.
+
 ## Testing Requirements
 
 **Tests are not optional for production code.**
@@ -192,6 +214,198 @@ my_module/
         ├── Kernel/
         └── Functional/
 ```
+
+## Theme and Frontend Development
+
+Use this guidance for Drupal theme work, Twig templates, preprocess functions,
+template suggestions, render arrays, CSS/SCSS, JavaScript libraries, and
+responsive implementation.
+
+### Theme Structure
+
+Custom themes usually live in `web/themes/custom/mytheme`:
+
+```
+mytheme/
+├── mytheme.info.yml
+├── mytheme.libraries.yml
+├── mytheme.theme
+├── mytheme.breakpoints.yml
+├── templates/
+│   ├── page.html.twig
+│   ├── node.html.twig
+│   ├── block.html.twig
+│   └── field.html.twig
+├── css/ or scss/
+├── js/
+└── images/
+```
+
+Use the bundled scaffold in `assets/theme-template/` when creating a new
+theme. Replace `THEMENAME` with the machine name and `THEMELABEL` with the
+human-readable name.
+
+### Theme Info and Libraries
+
+Define global libraries in the theme `.info.yml` and conditional libraries in
+preprocess or Twig:
+
+```yaml
+# mytheme.info.yml
+name: My Theme
+type: theme
+description: 'A custom Drupal theme'
+core_version_requirement: ^10.3 || ^11
+base theme: stable9
+libraries:
+  - mytheme/global-styling
+regions:
+  header: Header
+  content: Content
+  footer: Footer
+```
+
+```yaml
+# mytheme.libraries.yml
+global-styling:
+  version: 1.0
+  css:
+    base:
+      css/base/reset.css: {}
+    layout:
+      css/layout/layout.css: {}
+    component:
+      css/components/button.css: {}
+    theme:
+      css/theme/styles.css: {}
+
+article:
+  css:
+    component:
+      css/components/article.css: {}
+  js:
+    js/article.js: {}
+  dependencies:
+    - core/drupal
+```
+
+Attach libraries with `{{ attach_library('mytheme/article') }}` in Twig or
+`$variables['#attached']['library'][] = 'mytheme/article';` in preprocess.
+Never inline CSS or JavaScript in Twig.
+
+### Twig Templates
+
+Keep templates mostly presentational:
+
+- Print with `{{ variable }}` and control flow with `{% if %}` or `{% for %}`.
+- Use `{% trans %}` or `|t` for user-facing strings.
+- Use `{{ content|without('field_name') }}` to render all remaining fields.
+- Use `|clean_class` for machine-safe CSS class names.
+- Avoid `|raw` unless markup has already been sanitized upstream.
+- Keep complex conditions, entity loading, and data shaping in preprocess.
+
+Common Drupal Twig functions:
+
+```twig
+{{ attach_library('mytheme/component') }}
+{{ url('entity.node.canonical', {'node': node.id}) }}
+{{ path('entity.node.canonical', {'node': node.id}) }}
+{{ file_url('public://image.jpg') }}
+{% set attributes = create_attribute() %}
+```
+
+Common template suggestions:
+
+```
+page--front.html.twig
+page--node--article.html.twig
+node--article--full.html.twig
+block--system-branding-block.html.twig
+field--node--field-image--article.html.twig
+views-view--blog--page-1.html.twig
+```
+
+### Preprocess and Suggestions
+
+Use preprocess for preparing variables and template suggestions:
+
+```php
+/**
+ * Implements hook_preprocess_HOOK() for node templates.
+ */
+function mytheme_preprocess_node(array &$variables): void {
+  $node = $variables['node'];
+
+  $variables['attributes']['class'][] = 'node--type-' . $node->bundle();
+
+  if ($node->bundle() === 'article') {
+    $variables['#attached']['library'][] = 'mytheme/article';
+  }
+}
+
+/**
+ * Implements hook_theme_suggestions_HOOK_alter() for node templates.
+ */
+function mytheme_theme_suggestions_node_alter(
+  array &$suggestions,
+  array $variables,
+): void {
+  $node = $variables['elements']['#node'];
+  $view_mode = $variables['elements']['#view_mode'];
+  $suggestions[] = 'node__' . $node->bundle() . '__' . $view_mode;
+}
+```
+
+Theme hook functions may be procedural, but keep them thin. For complex logic,
+move work into a service or theme service subscriber and keep cache metadata
+accurate.
+
+### Breakpoints and Responsive Design
+
+Use mobile-first styles and define reusable breakpoints when Drupal needs to
+know about them:
+
+```yaml
+mytheme.mobile:
+  label: Mobile
+  mediaQuery: 'screen and (min-width: 0px)'
+  weight: 0
+  multipliers:
+    - 1x
+    - 2x
+
+mytheme.desktop:
+  label: Desktop
+  mediaQuery: 'screen and (min-width: 1024px)'
+  weight: 2
+  multipliers:
+    - 1x
+```
+
+### Frontend Best Practices
+
+- Use semantic HTML landmarks: `header`, `nav`, `main`, `aside`, and `footer`.
+- Meet WCAG contrast requirements and preserve keyboard navigation.
+- Use BEM or the project's existing class naming convention.
+- Prefer component-level SCSS partials and reusable variables/mixins.
+- Load global assets only when they are genuinely global.
+- Add responsive image styles rather than hardcoding large image output.
+- Enable Twig debugging only in development.
+- Clear caches after template, preprocess, library, or breakpoint changes.
+
+### Theme Debugging
+
+```bash
+ddev drush cr
+ddev drush twig:debug
+```
+
+If template changes do not appear, check the file name, active suggestion in
+HTML source, theme registry cache, and whether the active theme is the theme
+being edited.
+
+See `references/theming.md` for detailed examples of theme files, libraries,
+Twig templates, breakpoints, and debugging.
 
 ## Common Patterns
 
@@ -780,13 +994,16 @@ return ['#markup' => 'Indsend formular'];
 return ['#markup' => $this->t('Submit form')];
 ```
 
-## Twig Best Practices
+## Twig and Template Best Practices
 
-- Variables are auto-escaped (no need for `|escape`)
-- Use `{% trans %}` for translatable strings
-- Use `attach_library` for CSS/JS, never inline
-- Enable Twig debugging in development
-- Use `{{ dump(variable) }}` for debugging
+- Variables are auto-escaped; do not add `|escape` everywhere.
+- Use `{% trans %}` or `|t` for translatable strings.
+- Use `attach_library` for CSS/JS, never inline assets.
+- Use `content|without('field_name')` to avoid duplicate field output.
+- Use `|clean_class` when building CSS classes from dynamic values.
+- Keep entity loading and complex branching out of Twig.
+- Enable Twig debugging in development only.
+- Use `{{ dump(variable) }}` for local debugging, then remove it.
 
 ```twig
 {# Correct - uses translation #}
@@ -795,7 +1012,7 @@ return ['#markup' => $this->t('Submit form')];
 {# Attach library #}
 {{ attach_library('my_module/my-library') }}
 
-{# Safe markup (already sanitized) #}
+{# Safe markup only when already sanitized #}
 {{ content|raw }}
 ```
 
@@ -808,6 +1025,7 @@ return ['#markup' => $this->t('Submit form')];
 5. [ ] Planned test coverage?
 6. [ ] Defined config schema for any custom config?
 7. [ ] Using dependency injection (no static calls)?
+8. [ ] For theme work, checked active theme, library attachment, template suggestion, cache metadata, and existing SCSS patterns?
 
 ## Drupal 10 to 11 Compatibility
 
@@ -1364,6 +1582,9 @@ drush ws --severity=error --count=20
 
 ## Sources
 
+- [Drupal Theming Guide](https://www.drupal.org/docs/theming-drupal)
+- [Twig Documentation](https://twig.symfony.com/doc/)
+- [Debugging Twig templates](https://www.drupal.org/docs/theming-drupal/twig-in-drupal/debugging-twig-templates)
 - [Drupal Testing Types](https://www.drupal.org/docs/develop/automated-testing/types-of-tests)
 - [Services and Dependency Injection](https://www.drupal.org/docs/drupal-apis/services-and-dependency-injection)
 - [Hooks vs Events](https://www.specbee.com/blogs/hooks-vs-events-in-drupal-making-informed-choice)
